@@ -1,6 +1,24 @@
 let recentTabs = [];
 let lastWindowId = null;
 
+// Load persisted state on startup
+chrome.storage.local.get(['recentTabs', 'lastWindowId'], (result) => {
+  if (result.recentTabs) {
+    recentTabs = result.recentTabs;
+  }
+  if (result.lastWindowId) {
+    lastWindowId = result.lastWindowId;
+  }
+});
+
+// Function to persist state
+function persistState() {
+  chrome.storage.local.set({
+    recentTabs: recentTabs,
+    lastWindowId: lastWindowId
+  });
+}
+
 // Track window focus changes
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
   if (windowId !== chrome.windows.WINDOW_ID_NONE) {
@@ -15,6 +33,7 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
         if (recentTabs.length > 10) {
           recentTabs = recentTabs.slice(0, 10);
         }
+        persistState();
       }
       lastWindowId = windowId;
     }
@@ -38,10 +57,13 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   } catch (e) {
     console.error('Error getting tab info:', e);
   }
+
+  persistState();
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   recentTabs = recentTabs.filter(id => id !== tabId);
+  persistState();
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
@@ -108,4 +130,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (activeTab) {
     lastWindowId = activeTab.windowId;
   }
+
+  persistState();
 });

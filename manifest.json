@@ -3,7 +3,7 @@
   "name": "Tab Switcher",
   "version": "1.0",
   "description": "Switch between two most recent tabs with Ctrl+J",
-  "permissions": ["tabs", "windows"],
+  "permissions": ["tabs", "windows", "storage"],
   "background": {
     "service_worker": "background.js"
   },
