@@ -1,15 +1,57 @@
 let recentTabs = [];
 let lastWindowId = null;
+let isInitialized = false;
 
-// Load persisted state on startup
-chrome.storage.local.get(['recentTabs', 'lastWindowId'], (result) => {
+// Initialize function to ensure state is loaded
+async function initialize() {
+  if (isInitialized) return;
+
+  const result = await chrome.storage.local.get(['recentTabs', 'lastWindowId']);
   if (result.recentTabs) {
     recentTabs = result.recentTabs;
   }
   if (result.lastWindowId) {
     lastWindowId = result.lastWindowId;
   }
-});
+
+  // Clean up any stale tabs from storage
+  const validTabs = [];
+  for (const tabId of recentTabs) {
+    try {
+      await chrome.tabs.get(tabId);
+      validTabs.push(tabId);
+    } catch (e) {
+      // Tab no longer exists, skip it
+    }
+  }
+  recentTabs = validTabs;
+
+  // Get all open tabs if recentTabs is empty
+  if (recentTabs.length === 0) {
+    const tabs = await chrome.tabs.query({});
+    tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+    recentTabs = tabs.map(tab => tab.id).slice(0, 10);
+  }
+
+  // Ensure current tab is in the list
+  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (currentTab) {
+    // Remove if already exists and add to front
+    recentTabs = recentTabs.filter(id => id !== currentTab.id);
+    recentTabs.unshift(currentTab.id);
+    if (recentTabs.length > 10) {
+      recentTabs = recentTabs.slice(0, 10);
+    }
+    lastWindowId = currentTab.windowId;
+    persistState();
+  }
+
+  isInitialized = true;
+  console.log('Extension initialized. Recent tabs:', recentTabs);
+}
+
+// Call initialize on startup
+initialize();
 
 // Function to persist state
 function persistState() {
@@ -69,6 +111,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.commands.onCommand.addListener(async (command) => {
   if (command === "switch-tabs") {
     try {
+      // Ensure extension is initialized
+      await initialize();
+
       // Get current tab to ensure we have the right window context
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
